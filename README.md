@@ -21,14 +21,34 @@ mp3 를 넣으면 전사 → 자막 분할 → 장면 구성 → 모션 → 렌�
 
 ## 설치
 
+### 플러그인으로 (권장)
+
+Claude Code 안에서 두 줄이면 끝난다.
+
+```
+/plugin marketplace add nam-yun-ha/korean-shorts-skill
+/plugin install korean-shorts@korean-shorts-skill
+```
+
+**어느 PC에서든 같은 두 줄이다.** 집에서 쓰던 걸 사무실에서 그대로 받을 수 있고,
+설치된 스킬 목록에 뜨기 때문에 이름을 외우고 있지 않아도 된다.
+고친 걸 받을 때는 `/plugin marketplace update korean-shorts-skill`.
+
+### 폴더만 복사해서
+
+플러그인이 부담스러우면 스킬 폴더만 `~/.claude/skills/` 에 두어도 똑같이 동작한다.
+대신 그 PC에만 남고, 설치 목록에는 안 뜬다.
+
 ```bash
-git clone https://github.com/nam-yun-ha/korean-shorts-skill.git ~/.claude/skills/korean-shorts
+git clone https://github.com/nam-yun-ha/korean-shorts-skill.git /tmp/ks
+cp -r /tmp/ks/plugins/korean-shorts/skills/korean-shorts ~/.claude/skills/
 ```
 
 Windows(PowerShell):
 
 ```powershell
-git clone https://github.com/nam-yun-ha/korean-shorts-skill.git "$env:USERPROFILE\.claude\skills\korean-shorts"
+git clone https://github.com/nam-yun-ha/korean-shorts-skill.git "$env:TEMP\ks"
+Copy-Item -Recurse "$env:TEMP\ks\plugins\korean-shorts\skills\korean-shorts" "$env:USERPROFILE\.claude\skills\"
 ```
 
 Claude Code 를 다시 켜면 `/korean-shorts` 로 뜬다.
@@ -66,12 +86,16 @@ Claude Code 를 다시 켜면 `/korean-shorts` 로 뜬다.
 ## 들어 있는 것
 
 ```
-SKILL.md                     설명서 — 10단계 절차 · 규칙 · 자주 틀리는 지점
-reference/STYLE-RULES.md     효과 28종 + 발동조건표 + 프레임 단위 실측값
-assets/scene-template.html   장면 뼈대 (무대 · 자막 · 안전선 · 레이어 순서)
-assets/chargen.py            3D 클레이 캐릭터 생성기 (4포즈, 순수 SVG)
-assets/build.py              템플릿 → index.html 빌드 + id 중복 검사
-assets/hyperframes.json      프로젝트 설정
+.claude-plugin/marketplace.json                 마켓플레이스 정의
+plugins/korean-shorts/
+  .claude-plugin/plugin.json                    플러그인 정의
+  skills/korean-shorts/
+    SKILL.md                                    설명서 — 10단계 절차 · 규칙 · 자주 틀리는 지점
+    reference/STYLE-RULES.md                    효과 28종 + 발동조건표 + 프레임 단위 실측값
+    assets/scene-template.html                  장면 뼈대 (무대 · 자막 · 안전선 · 레이어 순서)
+    assets/chargen.py                           3D 클레이 캐릭터 생성기 (4포즈, 순수 SVG)
+    assets/build.py                             템플릿 → index.html 빌드 + id 중복 검사
+    assets/hyperframes.json                     프로젝트 설정
 ```
 
 ---

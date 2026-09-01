@@ -1,0 +1,9 @@
+{
+  "name": "korean-shorts",
+  "description": "한국어 세로 쇼츠 모션그래픽 — 나레이션 음원 하나로 자막·장면 구성·모션·렌더까지",
+  "author": {
+    "name": "nam-yun-ha"
+  },
+  "homepage": "https://github.com/nam-yun-ha/korean-shorts-skill",
+  "license": "MIT"
+}
