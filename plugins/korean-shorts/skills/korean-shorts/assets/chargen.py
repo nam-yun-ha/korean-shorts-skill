@@ -4,9 +4,21 @@
 외부 이미지 의존 0. SVG 그라디언트 + 다중 drop-shadow 만으로 입체를 만든다.
 viewBox 는 항상 "0 0 260 420".
 
-clay_char(prefix, pose) -> str        # <svg> 안에 들어갈 내용
+clay_char(prefix, pose, look=None) -> str     # <svg> 안에 들어갈 내용
   prefix : 페이지 전역에서 유일해야 하는 id 접두사 (HyperFrames 규칙)
-  pose   : 'grief' | 'cheer' | 'point'
+  pose   : 'grief' | 'cheer' | 'rush' | 'point'
+  look   : make_look() 이 만든 외모 딕셔너리. None 이면 기본 외모(갈색머리·파랑옷)
+
+make_look(seed) -> dict
+  seed 문자열(날짜·주제 등)에서 외모를 결정론적으로 뽑는다.
+  같은 seed 면 항상 같은 사람이 나온다. **영상 하나에는 look 하나만 쓴다.**
+
+  바뀌는 것   머리색 5종 · 헤어스타일 4종 · 옷색 6종 · 안경 유무  = 240가지
+  고정되는 것 피부 톤 · 클레이 질감 · 그림자 · 외곽선 · 얼굴 그리는 법 · 포즈 4종
+              캐릭터는 빨강(#E12F2C)을 입지 않는다 — 빨강은 주석 층 전용이다
+
+  ※ 왜 전부 바꾸지 않는가: 다 바꾸면 채널 그림이 매일 달라져 정체성이 사라진다.
+    피부와 질감이 고정이라 다른 사람이어도 "같은 세계의 사람"으로 읽힌다.
 
 애니메이션용 id
   {prefix}-arms  : cheer  — 두 팔 그룹 (rotation)
@@ -15,8 +27,66 @@ clay_char(prefix, pose) -> str        # <svg> 안에 들어갈 내용
 회전은 반드시 CSS `transform-box:fill-box; transform-origin:..%` 로. GSAP svgOrigin 금지.
 """
 
+import hashlib
 
-def _defs(P):
+# ── 외모 팔레트 ──────────────────────────────────────────────
+# 머리색 (밝은 곳 → 중간 → 어두운 곳)
+HAIR = {
+    'black':      ('#4A4A55', '#25252E', '#0D0D13'),
+    'darkbrown':  ('#B9825A', '#7B4A2D', '#3A1D0F'),
+    'lightbrown': ('#DCAE80', '#AB764C', '#5E3B21'),
+    'gray':       ('#D8D8DE', '#9C9CA6', '#5B5B66'),
+    'auburn':     ('#CB8C64', '#8C4C33', '#45211B'),
+}
+
+# 옷색 — (shirt 3단, sleeve 3단, pants 3단, shoe 2단)
+# 빨강 계열은 넣지 않는다. 주석 층(#E12F2C)과 섞이면 층이 무너진다.
+CLOTH = {
+    'blue':   (('#8ACFF8', '#3182CE', '#153E74'), ('#7CC4F5', '#3182CE', '#194780'),
+               ('#688EC4', '#2C5282', '#101F3B'), ('#3B5C8C', '#0A1628')),
+    'teal':   (('#8AF0E6', '#2FA8A0', '#0F4C48'), ('#7CE6DC', '#2FA8A0', '#12544F'),
+               ('#63AFA8', '#25706C', '#0B2E2C'), ('#357572', '#08201F')),
+    'navy':   (('#7C93C8', '#2F4A85', '#101F44'), ('#7189C2', '#2F4A85', '#14244B'),
+               ('#5D6E9C', '#26365E', '#0A1128'), ('#36436B', '#070C1A')),
+    'olive':  (('#CBD98A', '#7C9130', '#3A4413'), ('#C2D17C', '#7C9130', '#404A16'),
+               ('#96A265', '#5A6626', '#22280C'), ('#5E6A32', '#181C08')),
+    'plum':   (('#D5A2D8', '#8B4A93', '#3F1B45'), ('#CC96D0', '#8B4A93', '#451E4B'),
+               ('#A277A6', '#63356A', '#2A1130'), ('#6B3D72', '#1C0A20')),
+    'slate':  (('#B4C2CE', '#5E7183', '#28323C'), ('#A9B8C6', '#5E7183', '#2C3742'),
+               ('#8595A3', '#47555F', '#1B2229'), ('#4E5C67', '#131A1F')),
+}
+
+HAIRSTYLES = ('cap', 'part', 'crop', 'bob')
+
+_DEFAULT = dict(hair='darkbrown', cloth='blue', style='cap', glasses=False, seed='default')
+
+
+def make_look(seed):
+    """seed 문자열에서 외모를 결정론적으로 뽑는다. 같은 seed = 같은 사람."""
+    h = hashlib.sha256(str(seed).encode('utf-8')).digest()
+    hk = sorted(HAIR)[h[0] % len(HAIR)]
+    ck = sorted(CLOTH)[h[1] % len(CLOTH)]
+    style = HAIRSTYLES[h[2] % len(HAIRSTYLES)]
+    glasses = (h[3] % 4 == 0)              # 넷 중 하나
+    if hk == 'gray':                       # 흰머리면 안경 확률을 올린다 (연배가 읽히게)
+        glasses = (h[3] % 2 == 0)
+    return dict(hair=hk, cloth=ck, style=style, glasses=glasses, seed=str(seed))
+
+
+def look_label(look):
+    """사람이 읽는 한 줄 설명 — 제작 기록에 남긴다."""
+    ko_h = {'black': '검은머리', 'darkbrown': '짙은갈색머리', 'lightbrown': '밝은갈색머리',
+            'gray': '흰머리', 'auburn': '적갈색머리'}
+    ko_s = {'cap': '기본', 'part': '가르마', 'crop': '짧은머리', 'bob': '단발'}
+    ko_c = {'blue': '파랑', 'teal': '청록', 'navy': '남색',
+            'olive': '올리브', 'plum': '자주', 'slate': '회청'}
+    return '%s · %s · %s옷%s' % (ko_h[look['hair']], ko_s[look['style']],
+                                 ko_c[look['cloth']], ' · 안경' if look['glasses'] else '')
+
+
+def _defs(P, look):
+    h1, h2, h3 = HAIR[look['hair']]
+    sh, sl, pa, so = CLOTH[look['cloth']]
     return f'''    <defs>
       <radialGradient id="{P}-skin" cx="34%" cy="26%" r="80%">
         <stop offset="0%" stop-color="#FFEDCE"/>
@@ -24,28 +94,28 @@ def _defs(P):
         <stop offset="100%" stop-color="#CE8A46"/>
       </radialGradient>
       <radialGradient id="{P}-hair" cx="30%" cy="20%" r="84%">
-        <stop offset="0%" stop-color="#B9825A"/>
-        <stop offset="48%" stop-color="#7B4A2D"/>
-        <stop offset="100%" stop-color="#3A1D0F"/>
+        <stop offset="0%" stop-color="{h1}"/>
+        <stop offset="48%" stop-color="{h2}"/>
+        <stop offset="100%" stop-color="{h3}"/>
       </radialGradient>
       <linearGradient id="{P}-shirt" x1="14%" y1="2%" x2="88%" y2="100%">
-        <stop offset="0%" stop-color="#8ACFF8"/>
-        <stop offset="40%" stop-color="#3182CE"/>
-        <stop offset="100%" stop-color="#153E74"/>
+        <stop offset="0%" stop-color="{sh[0]}"/>
+        <stop offset="40%" stop-color="{sh[1]}"/>
+        <stop offset="100%" stop-color="{sh[2]}"/>
       </linearGradient>
       <linearGradient id="{P}-sleeve" x1="6%" y1="0%" x2="94%" y2="100%">
-        <stop offset="0%" stop-color="#7CC4F5"/>
-        <stop offset="50%" stop-color="#3182CE"/>
-        <stop offset="100%" stop-color="#194780"/>
+        <stop offset="0%" stop-color="{sl[0]}"/>
+        <stop offset="50%" stop-color="{sl[1]}"/>
+        <stop offset="100%" stop-color="{sl[2]}"/>
       </linearGradient>
       <linearGradient id="{P}-pants" x1="12%" y1="0%" x2="90%" y2="100%">
-        <stop offset="0%" stop-color="#688EC4"/>
-        <stop offset="48%" stop-color="#2C5282"/>
-        <stop offset="100%" stop-color="#101F3B"/>
+        <stop offset="0%" stop-color="{pa[0]}"/>
+        <stop offset="48%" stop-color="{pa[1]}"/>
+        <stop offset="100%" stop-color="{pa[2]}"/>
       </linearGradient>
       <linearGradient id="{P}-shoe" x1="18%" y1="0%" x2="82%" y2="100%">
-        <stop offset="0%" stop-color="#3B5C8C"/>
-        <stop offset="100%" stop-color="#0A1628"/>
+        <stop offset="0%" stop-color="{so[0]}"/>
+        <stop offset="100%" stop-color="{so[1]}"/>
       </linearGradient>
       <linearGradient id="{P}-warm" x1="12%" y1="0%" x2="88%" y2="100%">
         <stop offset="0%" stop-color="#FBD38D"/>
@@ -103,13 +173,58 @@ def _body_run(P):
     </g>'''
 
 
-def _head(P):
-    """뒷머리 구 -> 얼굴 구 -> 앞머리 캡(대칭) -> 하이라이트."""
+def _front_hair(P, style, dx=0):
+    """앞머리. 스타일마다 실루엣이 달라진다. dx 는 머리 중심 이동량(rush 포즈는 18)."""
+    X = lambda v: v + dx
+    H = f'url(#{P}-hair)'
+    if style == 'crop':                       # 짧은머리 — 이마가 넓게 보인다
+        return (f'      <path d="M{X(80)} 100 A50 50 0 0 1 {X(180)} 100 '
+                f'L{X(180)} 84 C{X(156)} 98 {X(104)} 98 {X(80)} 84 Z" fill="{H}"/>')
+    if style == 'part':                       # 가르마 — 헤어라인이 비스듬하다
+        return (f'      <path d="M{X(78)} 106 A52 52 0 0 1 {X(182)} 106 '
+                f'L{X(182)} 66 C{X(162)} 94 {X(116)} 106 {X(78)} 94 Z" fill="{H}"/>')
+    if style == 'bob':                        # 단발 — 옆머리가 턱선까지 내려온다
+        return (f'      <path d="M{X(76)} 108 C{X(66)} 148 {X(72)} 178 {X(84)} 188 '
+                f'C{X(96)} 178 {X(94)} 146 {X(98)} 114 Z" fill="{H}"/>\n'
+                f'      <path d="M{X(184)} 108 C{X(194)} 148 {X(188)} 178 {X(176)} 188 '
+                f'C{X(164)} 178 {X(166)} 146 {X(162)} 114 Z" fill="{H}"/>\n'
+                f'      <path d="M{X(78)} 106 A52 52 0 0 1 {X(182)} 106 '
+                f'L{X(182)} 70 C{X(158)} 92 {X(102)} 92 {X(78)} 70 Z" fill="{H}"/>')
+    return (f'      <path d="M{X(78)} 106 A52 52 0 0 1 {X(182)} 106 '   # cap — 기본
+            f'L{X(182)} 74 C{X(158)} 94 {X(102)} 94 {X(78)} 74 Z" fill="{H}"/>')
+
+
+def _glasses(dx=0):
+    """얼굴 위에 얹는다. 그리는 순서상 얼굴(_FACE)보다 뒤에 와야 한다."""
+    X = lambda v: v + dx
+    return (f'    <g opacity=".92">\n'
+            f'      <rect x="{X(94)}" y="92" width="36" height="28" rx="12" '
+            f'fill="#BEE3F8" fill-opacity=".16" stroke="#2D3748" stroke-width="5"/>\n'
+            f'      <rect x="{X(132)}" y="92" width="36" height="28" rx="12" '
+            f'fill="#BEE3F8" fill-opacity=".16" stroke="#2D3748" stroke-width="5"/>\n'
+            f'      <path d="M{X(130)} 106 L{X(132)} 106" stroke="#2D3748" stroke-width="5"/>\n'
+            f'    </g>')
+
+
+def _head_core(P, look, dx=0):
+    """뒷머리 구 -> 얼굴 구 -> 앞머리(스타일별) -> 하이라이트."""
+    X = lambda v: v + dx
+    return (f'      <circle cx="{X(130)}" cy="98" r="60" fill="url(#{P}-hair)"/>\n'
+            f'      <circle cx="{X(130)}" cy="106" r="52" fill="url(#{P}-skin)"/>\n'
+            + _front_hair(P, look['style'], dx) + '\n'
+            f'      <ellipse cx="{X(104)}" cy="86" rx="20" ry="12" fill="#fff" '
+            f'opacity=".36" filter="url(#{P}-blur)"/>')
+
+
+def _head(P, look):
     return f'''    <g filter="url(#{P}-soft)">
-      <circle cx="130" cy="98" r="60" fill="url(#{P}-hair)"/>
-      <circle cx="130" cy="106" r="52" fill="url(#{P}-skin)"/>
-      <path d="M78 106 A52 52 0 0 1 182 106 L182 74 C158 94 102 94 78 74 Z" fill="url(#{P}-hair)"/>
-      <ellipse cx="104" cy="86" rx="20" ry="12" fill="#fff" opacity=".36" filter="url(#{P}-blur)"/>
+{_head_core(P, look)}
+    </g>'''
+
+
+def _head_run(P, look):
+    return f'''    <g filter="url(#{P}-soft)" transform="rotate(10 148 108)">
+{_head_core(P, look, 18)}
     </g>'''
 
 
@@ -183,29 +298,26 @@ def _drops(P):
     return chr(10).join(out)
 
 
-def _head_run(P):
-    return f'''    <g filter="url(#{P}-soft)" transform="rotate(10 148 108)">
-      <circle cx="148" cy="98" r="60" fill="url(#{P}-hair)"/>
-      <circle cx="148" cy="106" r="52" fill="url(#{P}-skin)"/>
-      <path d="M96 106 A52 52 0 0 1 200 106 L200 74 C176 94 120 94 96 74 Z" fill="url(#{P}-hair)"/>
-      <ellipse cx="122" cy="86" rx="20" ry="12" fill="#fff" opacity=".36" filter="url(#{P}-blur)"/>
-    </g>'''
-
-
-def clay_char(prefix, pose):
-    """그리는 순서: 접지그림자 -> 몸통 -> 머리 -> 팔 -> 얼굴 -> (땀방울)"""
+def clay_char(prefix, pose, look=None):
+    """그리는 순서: 접지그림자 -> 몸통 -> 머리 -> 팔 -> 얼굴 -> 안경 -> (땀방울)"""
     P = prefix
+    look = look or _DEFAULT
     if pose == 'rush':
         face = _FACE['rush'].replace('cx="110"', 'cx="128"').replace('cx="150"', 'cx="168"')
         face = face.replace('cx="130" cy="136"', 'cx="148" cy="136"')
         face = face.replace('M96 84 L122 72', 'M114 84 L140 72').replace('M142 72 L168 84', 'M160 72 L186 84')
-        body = chr(10).join([_body_run(P), _head_run(P), _arms(P, pose), face,
-                 _drops(P).replace('translate(214,60)', 'translate(214,48)')
-                          .replace('translate(46,54)', 'translate(58,44)')
-                          .replace('translate(220,138)', 'translate(228,120)')])
+        inner = [_body_run(P), _head_run(P, look), _arms(P, pose), face]
+        if look['glasses']:
+            inner.append(_glasses(18))
+        inner.append(_drops(P).replace('translate(214,60)', 'translate(214,48)')
+                              .replace('translate(46,54)', 'translate(58,44)')
+                              .replace('translate(220,138)', 'translate(228,120)'))
+        body = chr(10).join(inner)
         lean = '    <g transform="rotate(11 130 340)">' + chr(10) + body + chr(10) + '    </g>'
-        return chr(10).join([_defs(P), _ground(P), lean])
-    parts = [_defs(P), _ground(P), _body(P), _head(P), _arms(P, pose), _FACE[pose]]
+        return chr(10).join([_defs(P, look), _ground(P), lean])
+    parts = [_defs(P, look), _ground(P), _body(P), _head(P, look), _arms(P, pose), _FACE[pose]]
+    if look['glasses']:
+        parts.append(_glasses())
     if pose == 'grief':
         parts.append(_drops(P))
     return chr(10).join(parts)
