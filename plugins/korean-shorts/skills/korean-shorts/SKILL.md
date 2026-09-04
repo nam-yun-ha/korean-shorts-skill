@@ -413,6 +413,85 @@ AI 영상은 앞뒤 프레임이 흔들리거나 뭉개져 못 쓴다. **10초 �
 프롬프트에 한 줄 더 넣으면 좋다 — **"핵심 동작이 클립 중간 60% 안에서 끝나게."**
 그래야 앞뒤를 마음껏 버릴 수 있다.
 
+### 프롬프트 — 있어야 할 것보다 **없어야 할 것**을 길게 쓴다
+
+영상 변형 프롬프트 스킬(`seedance-footage-vfx`)에서 가져온 원리다. 원문은 이미 있는 영상을
+고치는 쪽이지만, 새로 만드는 클링·Veo 에도 그대로 통한다.
+
+**핵심은 하나 — 무너지기 쉬운 금지는 프롬프트 끝에 한 번 더 쓴다.**
+모델은 앞에 적은 지시를 뒤로 갈수록 잊는다. 그래서 제일 중요한 금지가 제일 먼저 무너진다.
+
+#### ① 글자는 반드시 두 번 막는다
+
+*「재개발」 편에서 `no text` 를 넣었는데도 Veo 가 간판에 「1대윤71문전임」 「단 오세조」
+「원핵 우리업 638-9463」 을 그려 넣었다. 상단 스크림을 .99 까지 올려 덮어야 했다.*
+
+한 번 쓰면 안 막힌다. 처음과 끝에 두 번 쓴다.
+
+```
+No text, no signage, no lettering, no license plates, no logos anywhere in frame.
+...
+Absolutely no text, signs, banners, or written characters of any kind.
+```
+
+간판이 있어야 자연스러운 장소(상가 · 거리 · 관공서)는 **그 각도를 피하라고** 주문한다 —
+`shot from an angle where no storefront signage is visible`.
+
+#### ② 화면의 위아래는 우리가 쓴다 — 비워 달라고 적는다
+
+우리 도식은 상단 y 0~600 과 하단 y 1080~1920 을 스크림으로 덮는다.
+**클립의 핵심 내용이 거기 있으면 통째로 가려진다.** 받고 나서는 못 고친다.
+
+```
+Vertical 9:16. Keep the subject and the key action in the CENTER third of the frame.
+Leave the top 30% and bottom 40% visually simple — nothing important there.
+```
+
+#### ③ 핵심 동작에 초를 박는다
+
+「무엇을 한다」만 쓰면 그게 몇 초에 오는지 모델이 정한다. 그러면 **우리 도식이 터지는 프레임과
+어긋난다.** 의미와 숫자를 같이 박아야 둘 중 하나가 흔들려도 남는다.
+
+```
+At about 3 seconds, the hand sets the document down and stops.
+Key action completes within the middle 60% of the clip.
+```
+
+*재개발 1장면은 이렇게 받아 시작을 2.9초로 골랐다 — 서류를 읽는 박자가
+「단독 입주권 없음」이 뜨는 f122 에 맞아떨어졌다.*
+
+#### ④ 길이 산수를 주문 전에 한다
+
+`받을 길이 − 버릴 앞뒤 = 실제로 쓸 수 있는 구간`
+
+**이 값이 필요 프레임보다 작으면 주문하기 전에 고친다.** 받고 나서 늘리는 건 `setpts` 뿐이고
+10%가 한계다. Veo 는 4·6·8초로만 나오므로 9.13초짜리 장면은 **주문 단계에서 둘로 쪼갠다** —
+재개발 7장면을 f1287 낱말 경계에서 4.17초 + 4.97초로 나눴다.
+
+#### ⑤ 밝은 대낮이 안전하다
+
+밤·네온은 얼굴과 색이 흔들린다. 게다가 **대비 게이트가 실사 프레임을 실제로 디코드해 읽기 때문에**
+어두운 클립 위에서는 글자가 더 자주 떨어진다.
+특별한 이유가 없으면 `warm directional daylight` 로 주문한다.
+
+#### ⑥ 고칠 때는 한 군데만 바꾸고 나머지는 글자 그대로 붙여넣는다
+
+「조금 더 밝게」 하려고 프롬프트를 새로 쓰면 **이미 잘 나온 것까지 다시 굴러간다.**
+바꿀 낱말만 바꾸고 나머지 문장은 손대지 않는다.
+
+#### 주문서 뼈대
+
+```
+Vertical 9:16, photoreal, warm directional daylight. [N] seconds.
+No text, no signage, no lettering, no license plates, no logos anywhere in frame.
+
+[누가 · 어디서 · 무엇을 하는지 한 문장. 카메라는 느리게 한 방향으로만.]
+At about [T] seconds, [핵심 동작]. Key action completes within the middle 60%.
+Keep the subject and key action in the CENTER third; top 30% and bottom 40% stay simple.
+
+Absolutely no text, signs, banners, or written characters of any kind.
+```
+
 ### 클립 준비 — 구간을 고르는 것이 편집이다
 
 ```bash
